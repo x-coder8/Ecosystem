@@ -66,5 +66,11 @@ Esta é a **versão 3.3** do projecto, com melhorias significativas em:
 - Balanceamento do ecossistema
 - Efeitos visuais
 
+Possíveis melhorias:
+
+- Melhorias no geral
+- Melhorias na colisão/desvio dos lagos
+
+
 > **Experimente observar como as populações se equilibram (ou desequilibram) ao longo do tempo!**
 
