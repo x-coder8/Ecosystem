@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Micro Ecossistema - Versão 3.3</title>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #132E21; /* Fundo verde escuro sólido */
+      font-family: Arial, sans-serif;
+    }
+    canvas { 
+      display: block; 
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  
+  <script>
+    // Configuração do canvas
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const bufferCanvas = document.createElement('canvas');
+    bufferCanvas.width = canvas.width;
+    bufferCanvas.height = canvas.height;
+    const bufferCtx = bufferCanvas.getContext('2d');
+
+    // Gerador de números aleatórios
+    let seed = 1;
+    function random() {
+      const x = Math.sin(seed++) * 10000;
+      return x - Math.floor(x);
+    }
+
+    // Constantes
+    const COLORS = {
+      PLANT: ['rgba(120, 180, 50, 0.8)', 'rgba(150, 200, 80, 0.8)', 'rgba(100, 160, 40, 0.8)'],
+      LAKE_EDGE: 'rgba(100, 200, 255, 0.8)',
+      LAKE_CENTER: 'rgba(50, 150, 200, 0.8)',
+    };
+
+    // Configurações
+    const Config = () => ({
+      // Configurações gerais
+      initialPlants: 200,
+      maxPlants: 1600,
+      plantGrowthRate: 0.05,
+      plantReproductionChance: 0.06,
+      seedDispersalChance: 0.008,
+      plantRegenerationDelay: 180,
+      plantClusterSize: 5,
+      plantClusterRadius: 25,
+      initialPlantClusterSize: 10,
+      lakeMinDistance: 200,
+      lakeEdgeDrinkDistance: 5,
+      lakeAvoidDistance: 15,
+      thirstIncreaseRate: 0.1,
+      thirstThreshold: 600,
+      thirstEnergyGain: 5,
+      postDrinkFleeDuration: 200,
+      drinkDuration: 60,
+      stuckThreshold: 90,
+      stuckMovementThreshold: 0.2,
+      stuckIgnoreCollisionsDuration: 30,
+      marginAvoidance: 10,
+
+      // Configurações de presas
+      initialPreys: 12,
+      maxPreys: 30,
+      preyEnergyLoss: 0.006,
+      preyFleeEnergyLossMultiplier: 2.0,
+      preyEnergyGain: 2.5,
+      preyMaxEnergy: 140,
+      preyEatCooldown: 150,
+      preySearchRadius: 300,
+      preyPredatorAvoidRadius: 300,
+      preyPredatorAlertRadius: 150,
+      preyPredatorWarningRadius: 250,
+      preyPredatorCriticalRadius: 100,
+      preyFleeSpeedMultiplier: 1.8,
+      preyAlertSpeedMultiplier: 0.6,
+      preyWarningSpeedMultiplier: 0.8,
+      preyMinPlantSize: 4,
+      preySpeed: 1.0,
+      preyGroupRadius: 150,
+      preyTreeSeekRadius: 200,
+      preyEnergyFleeBoost: 1.5,
+      preyFleeEnergyThreshold: 0.3,
+      preyReproductionEnergyThreshold: 0.7,
+      preyReproductionCooldown: 450,
+      preyJuvenileSize: 3,
+      preyMatureSize: 5,
+      preyJuvenileColor: [255, 255, 100],
+      preyMaxOffspring: 2,
+      preyMaturationAge: 10,
+
+      // Configurações de predadores
+      initialPredators: 2,
+      maxPredators: 5,
+      predatorEnergyLoss: 0.01,
+      predatorEnergyGain: 35,
+      predatorSatedEnergy: 100,
+      predatorMaxEnergy: 150,
+      predatorEatingCooldown: 250,
+      maxPreyPerMeal: 2,
+      eatDuration: 120,
+      predatorSearchRadius: 350,
+      predatorSpeed: 2.4,
+      predatorStealthRadius: 60,
+      predatorGroupRadius: 120,
+      predatorDispersionForce: 0.3,
+      predatorMovementAlertRadius: 400,
+      predatorHungerThreshold: 0.85,
+      predatorHuntingSpeedMultiplier: 2.0,
+      predatorAmbushRadius: 130,
+      predatorReproductionEnergyThreshold: 0.7,
+      predatorReproductionCooldown: 1200,
+      predatorJuvenileSize: 4,
+      predatorMatureSize: 7,
+      predatorJuvenileColor: [255, 128, 128], // 255,10, 10
+      predatorMaxOffspring: 2,
+      predatorMaturationAge: 10,
+
+      // Configurações compartilhadas de reprodução
+      juvenileFollowDistance: 25,
+      reproductionChance: 0.02,
+
+      // ... outras configurações
+      lakeAvoidDistance: 20,  // Distância para começar a evitar o lago
+      lakeAvoidForce: 0.8,    // Força da evasão
+    });
+    const settings = Config();
+
+    // Funções utilitárias
+    const Util = {
+    avoidLake(entity, desiredAngle) {
+        if (entity.isDrinking) return desiredAngle;
+
+        let closestLake = null;
+        let minDistance = Infinity;
+        let closestPoint = null;
+        let minPointDistance = Infinity;
+        let isInsideLake = false;
+
+        // Encontrar o lago mais próximo
+        for (const lake of lakes) {
+            const distance = Math.hypot(entity.x - lake.x, entity.y - lake.y);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestLake = lake;
+            }
+            
+            if (lake.contains(entity.x, entity.y)) {
+                isInsideLake = true;
+                // Encontrar o ponto mais próximo da margem
+                for (const point of lake.points) {
+                    const pointDistance = Math.hypot(entity.x - point.x, entity.y - point.y);
+                    if (pointDistance < minPointDistance) {
+                        minPointDistance = pointDistance;
+                        closestPoint = point;
+                    }
+                }
+            }
+        }
+
+        // Se estiver dentro do lago
+        if (isInsideLake && !entity.isDrinking) {
+            const angleToShore = Math.atan2(closestPoint.y - entity.y, closestPoint.x - entity.x);
+            // Movimento suave para fora do lago
+            const escapeForce = 2.5 * (1 - (minPointDistance / closestLake.radius));
+            entity.x += Math.cos(angleToShore) * escapeForce;
+            entity.y += Math.sin(angleToShore) * escapeForce;
+            return angleToShore;
+        }
+
+        // Prever próxima posição
+        const nextX = entity.x + Math.cos(desiredAngle) * entity.speed * 5; // Look ahead
+        const nextY = entity.y + Math.sin(desiredAngle) * entity.speed * 5;
+
+        // Se estiver se aproximando do lago (mas não com sede)
+        if (closestLake && closestLake.contains(nextX, nextY) && entity.thirst <= settings.thirstThreshold) {
+            // Encontrar o ponto mais próximo na margem
+            let shorePoint = null;
+            let minShoreDistance = Infinity;
+            
+            for (const point of closestLake.points) {
+                const distance = Math.hypot(entity.x - point.x, entity.y - point.y);
+                if (distance < minShoreDistance) {
+                    minShoreDistance = distance;
+                    shorePoint = point;
+                }
+            }
+
+            if (shorePoint) {
+                // Calcular ângulo tangente à margem
+                const angleToShore = Math.atan2(shorePoint.y - entity.y, shorePoint.x - entity.x);
+                const tangentAngle = angleToShore + (random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+                
+                // Suavizar a transição entre o ângulo atual e o tangente
+                const avoidanceFactor = Math.min(1, (settings.lakeAvoidDistance - minDistance) / settings.lakeAvoidDistance);
+                return desiredAngle + (tangentAngle - desiredAngle) * avoidanceFactor * 0.8;
+            }
+        }
+
+        return desiredAngle;
+    },
+
+      checkEdges(entity, lastAngle, closestPredator) {
+        const margin = settings.marginAvoidance;
+        const isNearEdge = entity.x < margin || entity.x > canvas.width - margin ||
+                         entity.y < margin || entity.y > canvas.height - margin;
+        if (!isNearEdge) return null;
+
+        if (closestPredator) {
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          const edgeVectorX = centerX - entity.x;
+          const edgeVectorY = centerY - entity.y;
+          const predVectorX = entity.x - closestPredator.x;
+          const predVectorY = entity.y - closestPredator.y;
+          const fleeX = 0.6 * edgeVectorX + 0.4 * predVectorX;
+          const fleeY = 0.6 * edgeVectorY + 0.4 * predVectorY;
+          const mag = Math.hypot(fleeX, fleeY);
+          if (mag > 0.0001) {
+            const angle = Math.atan2(fleeY, fleeX);
+            entity.speed *= 1.5;
+            setTimeout(() => { entity.speed = entity.baseSpeed; }, 2000);
+            return angle;
+          }
+        }
+
+        entity.x += (random() - 0.5) * 3;
+        entity.y += (random() - 0.5) * 3;
+        return Math.PI - lastAngle + (random() - 0.5) * 0.8;
+      },
+
+      findSafeLake(prey, lakes, predators) {
+        let safeLakes = lakes.filter(lake => {
+          return !predators.some(predator => {
+            const distance = Math.hypot(lake.x - predator.x, lake.y - predator.y);
+            return distance < settings.preyPredatorAvoidRadius;
+          });
+        });
+
+        if (safeLakes.length === 0 && prey.thirst > settings.thirstThreshold * 1.5) {
+          safeLakes = lakes;
+        }
+
+        const chosenLake = safeLakes.reduce((closest, lake) => {
+          const distance = Math.hypot(prey.x - lake.x, prey.y - lake.y);
+          return !closest || distance < Math.hypot(prey.x - closest.x, prey.y - closest.y) ? lake : closest;
+        }, lakes[0]);
+
+        let closestPoint = null;
+        let minPointDistance = Infinity;
+        for (const point of chosenLake.points) {
+          const distance = Math.hypot(prey.x - point.x, prey.y - point.y);
+          if (distance < minPointDistance) {
+            minPointDistance = distance;
+            closestPoint = point;
+          }
+        }
+
+        return closestPoint ? { x: closestPoint.x, y: closestPoint.y } : chosenLake;
+      },
+
+      findClosestTree(prey) {
+        let closestTree = null;
+        let minDistance = Infinity;
+        for (const tree of trees) {
+          const distance = Math.hypot(prey.x - tree.x, prey.y - tree.y);
+          if (distance < minDistance && distance < settings.preyTreeSeekRadius) {
+            minDistance = distance;
+            closestTree = tree;
+          }
+        }
+        return closestTree;
+      }
+    };
+
+    // Sistema de Grid Espacial
+    class SpatialGrid {
+      constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.grid = {};
+      }
+
+      key(x, y) {
+        return `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)}`;
+      }
+
+      insert(entity) {
+        const key = this.key(entity.x, entity.y);
+        if (!this.grid[key]) this.grid[key] = [];
+        this.grid[key].push(entity);
+      }
+
+      search(x, y, radius) {
+        const keys = new Set();
+        const cellX = Math.floor(x / this.cellSize);
+        const cellY = Math.floor(y / this.cellSize);
+        const range = Math.ceil(radius / this.cellSize);
+
+        for (let i = cellX - range; i <= cellX + range; i++) {
+          for (let j = cellY - range; j <= cellY + range; j++) {
+            keys.add(`${i},${j}`);
+          }
+        }
+
+        const entities = [];
+        keys.forEach(key => {
+          if (this.grid[key]) entities.push(...this.grid[key]);
+        });
+        return entities;
+      }
+
+      clear() {
+        this.grid = {};
+      }
+    }
+
+    const plantGrid = new SpatialGrid(100);
+    const preyGrid = new SpatialGrid(100);
+    const predatorGrid = new SpatialGrid(100);
+
+    // Sistema de Eventos e Estatísticas
+    const events = {
+      listeners: {},
+      on(event, callback) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(callback);
+      },
+      emit(event, data) {
+        if (this.listeners[event]) {
+          this.listeners[event].forEach(callback => callback(data));
+        }
+      }
+    };
+
+    const stats = {
+      plantsBorn: 0,
+      plantsEaten: 0,
+      preysKilled: 0,
+      predatorsKilled: 0,
+      startTime: Date.now(),
+      activityTime() {
+        return ((Date.now() - this.startTime) / 1000).toFixed(1) + 's';
+      }
+    };
+
+    events.on('plantEaten', () => stats.plantsEaten++);
+    events.on('preyKilled', () => stats.preysKilled++);
+    events.on('predatorKilled', () => stats.predatorsKilled++);
+
+    // Classe Lago
+    class Lake {
+      constructor(radius, x, y) {
+        this.radius = radius;
+        this.x = x || random() * canvas.width;
+        this.y = y || random() * canvas.height;
+        this.points = [];
+        const numPoints = 10;
+        for (let i = 0; i < numPoints; i++) {
+          const angle = (i / numPoints) * Math.PI * 2;
+          const irregularity = 0.9 + random() * 0.2;
+          const px = this.x + Math.cos(angle) * this.radius * irregularity;
+          const py = this.y + Math.sin(angle) * this.radius * irregularity;
+          this.points.push({ x: px, y: py });
+        }
+        this.generateTrees();
+      }
+
+      generateTrees() {
+        const numTrees = 5 + Math.floor(random() * 6);
+        for (let i = 0; i < numTrees; i++) {
+          const angle = random() * Math.PI * 2;
+          const distance = this.radius + 10 + random() * 20;
+          const tx = this.x + Math.cos(angle) * distance;
+          const ty = this.y + Math.sin(angle) * distance;
+          if (!this.contains(tx, ty)) {
+            trees.push(new Tree(tx, ty));
+          }
+        }
+      }
+
+      contains(x, y) {
+        let inside = false;
+        for (let i = 0, j = this.points.length - 1; i < this.points.length; j = i++) {
+          const xi = this.points[i].x, yi = this.points[i].y;
+          const xj = this.points[j].x, yj = this.points[j].y;
+          const intersect = ((yi > y) !== (yj > y)) &&
+                           (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+
+      draw() {
+        const gradient = bufferCtx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+        gradient.addColorStop(0, COLORS.LAKE_CENTER);
+        gradient.addColorStop(1, COLORS.LAKE_EDGE);
+
+        bufferCtx.fillStyle = gradient;
+        bufferCtx.beginPath();
+        bufferCtx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+          bufferCtx.lineTo(this.points[i].x, this.points[i].y);
+        }
+        bufferCtx.closePath();
+        bufferCtx.fill();
+      }
+    }
+
+    // Classe Árvore
+    class Tree {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 6 + random() * 4;
+        this.color = COLORS.PLANT[Math.floor(random() * 3)];
+      }
+
+      draw() {
+        bufferCtx.fillStyle = this.color;
+        bufferCtx.beginPath();
+        bufferCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        bufferCtx.fill();
+      }
+    }
+
+    // Classe Planta
+    class Plant {
+      constructor(x, y, isInitial = false) {
+        this.x = x || random() * canvas.width;
+        this.y = y || random() * canvas.height;
+        this.size = 8 + random() * 4;
+        this.maxSize = 10 + random() * 5;
+        this.color = COLORS.PLANT[Math.floor(random() * 3)];
+        this.type = 'plant';
+        this.id = random().toString(36).substr(2, 9);
+        this.isActive = this.size < this.maxSize || random() < settings.seedDispersalChance;
+
+        if (isInitial && random() < 0.7) {
+          const clusterSize = settings.initialPlantClusterSize;
+          const radius = 40;
+          for (let i = 0; i < clusterSize; i++) {
+            const offsetX = (random() - 0.5) * radius;
+            const offsetY = (random() - 0.5) * radius;
+            plants.push(new Plant(this.x + offsetX, this.y + offsetY));
+            stats.plantsBorn++;
+          }
+        }
+      }
+
+      update() {
+        if (!this.isActive) return;
+        if (this.size < this.maxSize) {
+          this.size += settings.plantGrowthRate * (0.5 + random());
+        } else if (random() < settings.seedDispersalChance && plants.length < settings.maxPlants) {
+          const angle = random() * Math.PI * 2;
+          const distance = 30 + random() * 50;
+          const newX = this.x + Math.cos(angle) * distance;
+          const newY = this.y + Math.sin(angle) * distance;
+          if (newX > 0 && newX < canvas.width && newY > 0 && newY < canvas.height) {
+            plants.push(new Plant(newX, newY));
+            stats.plantsBorn++;
+          }
+        }
+        this.isActive = this.size < this.maxSize || random() < settings.seedDispersalChance;
+      }
+
+      draw() {
+        bufferCtx.fillStyle = this.color;
+        bufferCtx.beginPath();
+        bufferCtx.arc(this.x, this.y, Math.max(0.1, this.size), 0, Math.PI * 2);
+        bufferCtx.fill();
+      }
+    }
+
+    // Classe base LivingEntity
+    class LivingEntity {
+      constructor(type) {
+        this.type = type;
+        this.id = random().toString(36).substr(2, 9);
+        this.x = random() * canvas.width;
+        this.y = random() * canvas.height;
+        this.lastX = this.x;
+        this.lastY = this.y;
+        this.lastAngle = random() * Math.PI * 2;
+        this.stuckTimer = 0;
+        this.ignoreCollisions = false;
+        this.ignoreCollisionsTimer = 0;
+        this.isEscapingStuck = false;
+        this.escapeStuckTimer = 0;
+        this.thirst = random() * settings.thirstThreshold;
+        this.isDrinking = false;
+        this.drinkTimer = 0;
+        this.drinkAnimation = 0;
+        this.age = 0;
+        this.isJuvenile = false;
+        this.parent = null;
+        this.reproductionCooldown = 0;
+      }
+
+      checkLake() {
+        for (const lake of lakes) {
+          if (lake.contains(this.x, this.y) && !this.isDrinking) {
+            console.log(`${this.type} ${this.id} stuck in lake: x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}`);
+            let minPointDistance = Infinity;
+            let closestPoint = null;
+            for (const point of lake.points) {
+              const distance = Math.hypot(this.x - point.x, this.y - point.y);
+              if (distance < minPointDistance) {
+                minPointDistance = distance;
+                closestPoint = point;
+              }
+            }
+            const angleToPoint = Math.atan2(closestPoint.y - this.y, closestPoint.x - this.x);
+            this.x += Math.cos(angleToPoint) * 3.0;
+            this.y += Math.sin(angleToPoint) * 3.0;
+            this.ignoreCollisions = true;
+            this.ignoreCollisionsTimer = 20;
+            this.lastAngle = angleToPoint;
+          }
+        }
+      }
+
+      checkStuck() {
+        const movement = Math.hypot(this.x - this.lastX, this.y - this.lastY);
+        if (movement < settings.stuckMovementThreshold && !this.isDrinking && !this.isEscapingStuck && !this.isEating) {
+          this.stuckTimer++;
+          if (this.stuckTimer > settings.stuckThreshold) {
+            let dx, dy;
+            const containingLake = lakes.find(lake => lake.contains(this.x, this.y));
+            if (containingLake) {
+              let minPointDistance = Infinity;
+              let closestPoint = null;
+              for (const point of containingLake.points) {
+                const distance = Math.hypot(this.x - point.x, this.y - point.y);
+                if (distance < minPointDistance) {
+                  minPointDistance = distance;
+                  closestPoint = point;
+                }
+              }
+              const angleToPoint = Math.atan2(closestPoint.y - this.y, closestPoint.x - this.x);
+              dx = Math.cos(angleToPoint) * 15;
+              dy = Math.sin(angleToPoint) * 15;
+            } else {
+              dx = (random() - 0.5) * 10;
+              dy = (random() - 0.5) * 10;
+            }
+            this.x += dx;
+            this.y += dy;
+            console.log(`${this.type} ${this.id} stuck: displaced dx=${dx.toFixed(2)}, dy=${dy.toFixed(2)}`);
+            this.ignoreCollisions = true;
+            this.ignoreCollisionsTimer = settings.stuckIgnoreCollisionsDuration;
+            this.isEscapingStuck = true;
+            this.escapeStuckTimer = 10;
+            this.stuckTimer = 0;
+            this.lastAngle = random() * Math.PI * 2;
+          }
+        } else {
+          this.stuckTimer = 0;
+        }
+        this.lastX = this.x;
+        this.lastY = this.y;
+      }
+    }
+
+    // Classe Presa
+    class Prey extends LivingEntity {
+      constructor(parent = null) {
+        super('prey');
+        this.isJuvenile = !!parent;
+        this.parent = parent;
+        this.offspring = [];
+        this.size = this.isJuvenile ? settings.preyJuvenileSize : settings.preyMatureSize;
+        this.maxSize = settings.preyMatureSize;
+        this.energy = this.isJuvenile ? settings.preyMaxEnergy : 60;
+        this.baseSpeed = settings.preySpeed * (0.8 + random() * 0.4);
+        this.speed = this.baseSpeed;
+        this.eatAnimation = 0;
+        this.eatCooldown = 0;
+        this.timeSinceLastMeal = 0;
+        this.wandering = true;
+        this.isFleeingFromLake = false;
+        this.fleeTimer = 0;
+        this.state = 'normal';
+        this.reproductionCooldown = this.isJuvenile ? settings.preyReproductionCooldown : 0;
+      }
+
+      update() {
+        this.offspring = this.offspring.filter(child => preys.includes(child) && child.isJuvenile);
+
+        if (this.isJuvenile && !this.parent) {
+          this.isJuvenile = false;
+          this.size = this.maxSize;
+        }
+
+        if (this.isJuvenile) {
+          this.thirst = 0;
+          this.energy = settings.preyMaxEnergy;
+
+          if (this.age >= settings.preyMaturationAge) {
+            this.isJuvenile = false;
+            this.size = this.maxSize;
+            this.parent = null;
+          } else {
+            if (this.parent && preys.includes(this.parent)) {
+              const dx = this.parent.x - this.x;
+              const dy = this.parent.y - this.y;
+              const distance = Math.hypot(dx, dy);
+              if (distance > settings.juvenileFollowDistance) {
+                const angle = Math.atan2(dy, dx);
+                this.x += Math.cos(angle) * this.speed;
+                this.y += Math.sin(angle) * this.speed;
+              }
+              this.x += (random() - 0.5) * 2;
+              this.y += (random() - 0.5) * 2;
+              return;
+            }
+          }
+        }
+
+        this.age += 1 / 60;
+        this.timeSinceLastMeal++;
+        this.thirst += settings.thirstIncreaseRate;
+
+        if (this.eatCooldown > 0) this.eatCooldown--;
+        if (this.isFleeingFromLake) this.fleeTimer--;
+        if (this.ignoreCollisions && --this.ignoreCollisionsTimer <= 0) {
+          this.ignoreCollisions = false;
+        }
+        if (this.isEscapingStuck && --this.escapeStuckTimer <= 0) {
+          this.isEscapingStuck = false;
+        }
+        if (this.reproductionCooldown > 0) this.reproductionCooldown--;
+
+        this.size = this.maxSize;
+
+        this.checkLake();
+        this.checkStuck();
+
+        if (!this.ignoreCollisions) {
+          const nearbyPreys = preyGrid.search(this.x, this.y, this.size * 3);
+          for (const other of nearbyPreys) {
+            if (other.id === this.id) continue;
+            const distance = Math.hypot(this.x - other.x, this.y - other.y);
+            if (distance < this.size + other.size && distance > 0) {
+              const angle = Math.atan2(this.y - other.y, this.x - other.x);
+              const force = (this.size + other.size - distance) / (this.size + other.size) * 0.2;
+              this.x += Math.cos(angle) * force;
+              this.y += Math.sin(angle) * force;
+            }
+          }
+        }
+
+        let closestPredator = null, minDistance = Infinity;
+        let alertPredator = null, alertDistance = Infinity;
+        let warningPredator = null, warningDistance = Infinity;
+        const nearbyPredators = predatorGrid.search(this.x, this.y, settings.preyPredatorWarningRadius);
+
+        nearbyPredators.forEach(predator => {
+          const dx = this.x - predator.x;
+          const dy = this.y - predator.y;
+          const distance = Math.hypot(dx, dy);
+          if (distance < minDistance && distance < settings.preyPredatorAvoidRadius) {
+            minDistance = distance;
+            closestPredator = predator;
+          } else if (distance < alertDistance && distance < settings.preyPredatorAlertRadius) {
+            alertDistance = distance;
+            alertPredator = predator;
+          }
+          if (distance < warningDistance && distance < settings.preyPredatorWarningRadius) {
+            warningDistance = distance;
+            warningPredator = predator;
+          }
+          if (distance < settings.preyPredatorCriticalRadius) {
+            const repulsionAngle = Math.atan2(dy, dx);
+            this.x += Math.cos(repulsionAngle) * 1.5;
+            this.y += Math.sin(repulsionAngle) * 1.5;
+          }
+        });
+
+        if (closestPredator) {
+          this.state = 'fleeing';
+        } else if (alertPredator) {
+          this.state = 'alert';
+        } else if (warningPredator) {
+          this.state = 'warning';
+        } else {
+          this.state = 'normal';
+        }
+
+        let closestLake = Util.findSafeLake(this, lakes, nearbyPredators);
+
+        let isInAnyLake = false;
+        for (const lake of lakes) {
+          if (lake.contains(this.x, this.y)) {
+            isInAnyLake = true;
+            if (this.thirst > settings.thirstThreshold && !this.isFleeingFromLake && this.state === 'normal') {
+              if (!this.isDrinking) {
+                this.isDrinking = true;
+                this.drinkTimer = settings.drinkDuration;
+                this.drinkAnimation = settings.drinkDuration;
+              }
+            }
+            break;
+          }
+        }
+
+        if (this.isDrinking) {
+          this.drinkTimer--;
+          if (this.drinkAnimation > 0) this.drinkAnimation--;
+          if (this.drinkTimer <= 0) {
+            this.isDrinking = false;
+            this.thirst = 0;
+            this.energy = Math.min(settings.preyMaxEnergy, this.energy + settings.thirstEnergyGain);
+            this.isFleeingFromLake = true;
+            this.fleeTimer = settings.postDrinkFleeDuration;
+            let closestPoint = null;
+            let minPointDistance = Infinity;
+            for (const lake of lakes) {
+              if (lake.contains(this.x, this.y)) {
+                for (const point of lake.points) {
+                  const distance = Math.hypot(this.x - point.x, this.y - point.y);
+                  if (distance < minPointDistance) {
+                    minPointDistance = distance;
+                    closestPoint = point;
+                  }
+                }
+                break;
+              }
+            }
+            this.lastAngle = closestPoint
+              ? Math.atan2(closestPoint.y - this.y, closestPoint.x - this.x)
+              : random() * Math.PI * 2;
+          }
+          return;
+        }
+
+        let energyLoss = settings.preyEnergyLoss;
+        let currentSpeed = this.baseSpeed;
+        let angle;
+
+        const edgeAngle = Util.checkEdges(this, this.lastAngle, closestPredator);
+
+        if (this.isEscapingStuck) {
+          angle = this.lastAngle;
+          currentSpeed *= 1.5;
+        } else if (edgeAngle !== null) {
+          angle = edgeAngle;
+          this.wandering = true;
+        } else if (this.state === 'fleeing' && closestPredator) {
+          const energyFactor = this.energy / settings.preyMaxEnergy;
+          currentSpeed = energyFactor > settings.preyFleeEnergyThreshold ?
+                       this.baseSpeed * settings.preyFleeSpeedMultiplier * (1 + settings.preyEnergyFleeBoost * energyFactor) :
+                       this.baseSpeed;
+          energyLoss *= settings.preyFleeEnergyLossMultiplier * (1 + 0.5 * energyFactor);
+
+          // Comportamento de fuga mais natural:
+          const baseAngle = Math.atan2(this.y - closestPredator.y, this.x - closestPredator.x);
+          
+          // 1. Adiciona uma pequena variação aleatória suave ao ângulo
+          const smoothVariation = Math.sin(frameCounter * 0.1) * Math.PI / 8;
+          
+          // 2. Tende a se afastar do predador com curvas suaves
+          angle = baseAngle + smoothVariation;
+          
+          // 3. Se houver árvores próximas, tenta se dirigir para elas
+          const closestTree = Util.findClosestTree(this);
+          if (closestTree && minDistance < settings.preyPredatorAvoidRadius * 0.7) {
+            const angleToTree = Math.atan2(closestTree.y - this.y, closestTree.x - this.x);
+            // Mistura o ângulo de fuga com o ângulo para a árvore
+            angle = angle * 0.6 + angleToTree * 0.4;
+          }
+
+          // 4. Comportamento de grupo - segue o fluxo de outras presas
+          const nearbyPreys = preyGrid.search(this.x, this.y, settings.preyGroupRadius);
+          if (nearbyPreys.length > 1) {
+            let avgAngleX = 0, avgAngleY = 0;
+            let count = 0;
+            
+            for (const other of nearbyPreys) {
+              if (other.id !== this.id && other.state === 'fleeing') {
+                const dx = other.x - this.x;
+                const dy = other.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 0) {
+                  avgAngleX += dx / dist;
+                  avgAngleY += dy / dist;
+                  count++;
+                }
+              }
+            }
+            
+            if (count > 0) {
+              avgAngleX /= count;
+              avgAngleY /= count;
+              const groupAngle = Math.atan2(avgAngleY, avgAngleX);
+              // Mistura o ângulo de fuga com o ângulo do grupo
+              angle = angle * 0.7 + groupAngle * 0.3;
+            }
+          }
+
+          // 5. Variação de velocidade - acelerações mais suaves
+          if (frameCounter % 30 === 0 && random() < 0.3) {
+            this.speed = currentSpeed * (0.9 + random() * 0.3);
+          }
+
+          this.wandering = false;
+        } else if (this.state === 'alert' && alertPredator) {
+          const avoidanceAngle = Math.atan2(this.y - alertPredator.y, this.x - alertPredator.x);
+          angle = avoidanceAngle;
+          currentSpeed = this.baseSpeed * settings.preyAlertSpeedMultiplier;
+          this.wandering = false;
+        } else if (this.state === 'warning' && warningPredator) {
+          const avoidanceAngle = Math.atan2(this.y - warningPredator.y, this.x - warningPredator.x);
+          angle = avoidanceAngle;
+          currentSpeed = this.baseSpeed * settings.preyWarningSpeedMultiplier;
+          this.wandering = false;
+        } else if (this.isFleeingFromLake && this.fleeTimer > 0) {
+          angle = Math.atan2(this.y - closestLake.y, this.x - closestLake.x);
+          currentSpeed = this.baseSpeed * settings.preyFleeSpeedMultiplier;
+          energyLoss *= settings.preyFleeEnergyLossMultiplier;
+          this.wandering = false;
+          if (this.fleeTimer <= 0) {
+            this.lastAngle = random() * Math.PI * 2;
+          }
+        } else if (this.thirst > settings.thirstThreshold && this.state === 'normal') {
+          angle = Math.atan2(closestLake.y - this.y, closestLake.x - this.x);
+          const distanceToLake = Math.hypot(this.x - closestLake.x, this.y - closestLake.y);
+          if (distanceToLake < settings.lakeEdgeDrinkDistance && !this.isDrinking) {
+            this.isDrinking = true;
+            this.drinkTimer = settings.drinkDuration;
+            this.drinkAnimation = settings.drinkDuration;
+          }
+          this.wandering = false;
+        } else if (this.energy < 60 || this.timeSinceLastMeal > 300) {
+          let targetPlant = null;
+          let minPlantDistance = Infinity;
+          const nearbyPlants = plantGrid.search(this.x, this.y, settings.preySearchRadius);
+          for (const plant of nearbyPlants) {
+            if (plant.size < settings.preyMinPlantSize) continue;
+            const distance = Math.hypot(this.x - plant.x, this.y - plant.y);
+            if (distance < minPlantDistance) {
+              minPlantDistance = distance;
+              targetPlant = plant;
+            }
+          }
+          if (targetPlant && this.state === 'normal') {
+            angle = Math.atan2(targetPlant.y - this.y, targetPlant.x - this.x);
+            this.wandering = false;
+          } else {
+            this.wandering = true;
+          }
+        } else {
+          if (this.wandering) {
+            if (random() < 0.05) {
+              this.lastAngle += (random() - 0.5) * Math.PI;
+            } else if (random() < 0.03) {
+              this.lastAngle = random() * Math.PI * 2;
+            } else {
+              this.lastAngle += (random() - 0.5) * 0.1;
+            }
+          }
+          angle = this.lastAngle;
+        }
+
+        angle = Util.avoidLake(this, angle);
+
+        this.x += Math.cos(angle) * currentSpeed;
+        this.y += Math.sin(angle) * currentSpeed;
+        this.lastAngle = angle;
+
+        this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+        this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+
+        this.energy -= energyLoss * (this.wandering ? 0.7 : 1);
+
+        if (this.eatCooldown === 0 && this.state === 'normal' && 
+            (this.energy < settings.preyMaxEnergy * 0.9 || this.timeSinceLastMeal > 200)) {
+          const nearbyPlants = plantGrid.search(this.x, this.y, this.size);
+          for (const plant of nearbyPlants) {
+            if (plant.size < settings.preyMinPlantSize) continue;
+            const distance = Math.hypot(this.x - plant.x, this.y - plant.y);
+            if (distance < this.size + plant.size) {
+              this.energy = Math.min(settings.preyMaxEnergy, this.energy + settings.preyEnergyGain);
+              for (let i = 0; i < settings.plantClusterSize; i++) {
+                const angle = random() * Math.PI * 2;
+                const distance = random() * settings.plantClusterRadius;
+                plantsToRegenerate.push({ 
+                  x: plant.x + Math.cos(angle) * distance, 
+                  y: plant.y + Math.sin(angle) * distance, 
+                  timer: settings.plantRegenerationDelay 
+                });
+              }
+              plantsToRemove.push(plant);
+              this.eatAnimation = 20;
+              this.eatCooldown = settings.preyEatCooldown;
+              this.timeSinceLastMeal = 0;
+              this.wandering = true;
+              events.emit('plantEaten');
+              break;
+            }
+          }
+        }
+
+        if (!this.isJuvenile && preys.length < settings.maxPreys &&
+            this.energy > settings.preyMaxEnergy * settings.preyReproductionEnergyThreshold &&
+            this.reproductionCooldown === 0 && this.state === 'normal' &&
+            random() < settings.reproductionChance && this.offspring.length === 0) {
+          const numOffspring = Math.floor(random() * settings.preyMaxOffspring) + 1;
+          for (let i = 0; i < numOffspring && preys.length < settings.maxPreys; i++) {
+            const offspring = new Prey(this);
+            offspring.x = this.x + (random() - 0.5) * 10;
+            offspring.y = this.y + (random() - 0.5) * 10;
+            preys.push(offspring);
+            this.offspring.push(offspring);
+          }
+          this.reproductionCooldown = settings.preyReproductionCooldown;
+          this.energy *= 0.8;
+        }
+
+        if (this.energy <= 0) {
+          preysToRemove.push(this);
+          events.emit('preyKilled');
+        }
+
+        if (this.eatAnimation > 0) this.eatAnimation--;
+      }
+
+      draw() {
+        const energyFactor = this.energy / settings.preyMaxEnergy;
+        let baseColor;
+        if (this.isJuvenile) {
+          baseColor = settings.preyJuvenileColor;
+        } else if (this.state === 'fleeing') {
+          baseColor = [223, 110, 20]; // 0,255, 0
+        } else if (this.state === 'alert') {
+          baseColor = [255, 191, 127];
+          this.x += (random() - 0.5) * 1.0;
+          this.y += (random() - 0.5) * 1.0;
+        } else if (this.state === 'warning') {
+          baseColor = [255, 219, 130];
+          this.x += (random() - 0.5) * 0.5;
+          this.y += (random() - 0.5) * 0.5;
+        } else {
+          baseColor = [255, 150 + Math.floor(50 * energyFactor), 0];
+        }
+        const alpha = (this.eatAnimation > 0 || this.drinkAnimation > 0) ? 1 :
+                      this.energy < 30 ? 0.5 + 0.3 * Math.sin(frameCounter * 0.1) : 0.8;
+        bufferCtx.fillStyle = `rgba(${baseColor.join(',')}, ${alpha})`;
+        bufferCtx.beginPath();
+        const pulseAmplitude = this.size * 0.4;
+        const pulsingSize = this.eatAnimation > 0 ? 
+                            this.size + Math.sin(this.eatAnimation * Math.PI / 10) * pulseAmplitude :
+                            this.drinkAnimation > 0 ?
+                            this.size + Math.sin(this.drinkAnimation * Math.PI / 10) * pulseAmplitude :
+                            this.size;
+        bufferCtx.arc(this.x, this.y, Math.max(0.1, pulsingSize), 0, Math.PI * 2);
+        bufferCtx.fill();
+      }
+    }
+
+    // Classe Predador
+    class Predator extends LivingEntity {
+      constructor(parent = null) {
+        super('predator');
+        this.isJuvenile = !!parent;
+        this.parent = parent;
+        this.offspring = [];
+        this.size = this.isJuvenile ? settings.predatorJuvenileSize : settings.predatorMatureSize;
+        this.maxSize = settings.predatorMatureSize;
+        this.energy = this.isJuvenile ? settings.predatorMaxEnergy : 60;
+        this.baseSpeed = settings.predatorSpeed * (0.8 + random() * 0.4);
+        this.speed = this.baseSpeed;
+        this.eatAnimation = 0;
+        this.eatingCooldown = 0;
+        this.preyEatenThisMeal = 0;
+        this.timeSinceLastMeal = 0;
+        this.isEating = false;
+        this.eatTimer = 0;
+        this.state = 'wandering';
+        this.reproductionCooldown = this.isJuvenile ? settings.predatorReproductionCooldown : 0;
+      }
+
+      update() {
+        this.offspring = this.offspring.filter(child => predators.includes(child) && child.isJuvenile);
+
+        if (this.isJuvenile && !this.parent) {
+          this.isJuvenile = false;
+          this.size = this.maxSize;
+        }
+
+        if (this.isJuvenile) {
+          this.thirst = 0;
+          this.energy = settings.predatorMaxEnergy;
+
+          if (this.age >= settings.predatorMaturationAge) {
+            this.isJuvenile = false;
+            this.size = this.maxSize;
+            this.parent = null;
+          } else {
+            if (this.parent && predators.includes(this.parent)) {
+              const dx = this.parent.x - this.x;
+              const dy = this.parent.y - this.y;
+              const distance = Math.hypot(dx, dy);
+              if (distance > settings.juvenileFollowDistance) {
+                const angle = Math.atan2(dy, dx);
+                this.x += Math.cos(angle) * this.speed;
+                this.y += Math.sin(angle) * this.speed;
+              }
+              this.x += (random() - 0.5) * 2;
+              this.y += (random() - 0.5) * 2;
+              return;
+            }
+          }
+        }
+
+        this.age += 1 / 60;
+        this.timeSinceLastMeal++;
+        this.thirst += settings.thirstIncreaseRate;
+
+        if (this.eatingCooldown > 0) this.eatingCooldown--;
+        if (this.ignoreCollisions && --this.ignoreCollisionsTimer <= 0) {
+          this.ignoreCollisions = false;
+        }
+        if (this.isEscapingStuck && --this.escapeStuckTimer <= 0) {
+          this.isEscapingStuck = false;
+        }
+        if (this.reproductionCooldown > 0) this.reproductionCooldown--;
+
+        this.size = this.maxSize;
+
+        this.checkLake();
+        this.checkStuck();
+
+        if (this.isEating) {
+          this.eatTimer--;
+          if (this.eatTimer <= 0) {
+            this.isEating = false;
+            this.lastAngle = random() * Math.PI * 2;
+          }
+          this.energy -= settings.predatorEnergyLoss;
+          if (this.eatAnimation > 0) this.eatAnimation--;
+          return;
+        }
+
+        if (!this.ignoreCollisions) {
+          const nearbyPredators = predatorGrid.search(this.x, this.y, this.size * 2);
+          for (const other of nearbyPredators) {
+            if (other.id === this.id) continue;
+            const distance = Math.hypot(this.x - other.x, this.y - other.y);
+            if (distance < this.size + other.size && distance > 0) {
+              const angle = Math.atan2(this.y - other.y, this.x - other.x);
+              const force = (this.size + other.size - distance) / (this.size + other.size) * 0.2;
+              const dispersionForce = (this.stuckTimer > 60 && other.stuckTimer > 60) ? settings.predatorDispersionForce : 0;
+              this.x += Math.cos(angle) * (force + dispersionForce);
+              this.y += Math.sin(angle) * (force + dispersionForce);
+            }
+          }
+        }
+
+        let closestLake = null;
+        let minLakeDistance = Infinity;
+        for (const lake of lakes) {
+          const distance = Math.hypot(this.x - lake.x, this.y - lake.y);
+          if (distance < minLakeDistance) {
+            minLakeDistance = distance;
+            closestLake = lake;
+          }
+        }
+
+        let isInAnyLake = false;
+        for (const lake of lakes) {
+          if (lake.contains(this.x, this.y)) {
+            isInAnyLake = true;
+            if (this.thirst > settings.thirstThreshold) {
+              if (!this.isDrinking) {
+                this.isDrinking = true;
+                this.drinkTimer = settings.drinkDuration;
+                this.drinkAnimation = settings.drinkDuration;
+              }
+            }
+            break;
+          }
+        }
+
+        if (this.isDrinking) {
+          this.drinkTimer--;
+          if (this.drinkAnimation > 0) this.drinkAnimation--;
+          if (this.drinkTimer <= 0) {
+            this.isDrinking = false;
+            this.thirst = 0;
+            this.energy = Math.min(settings.predatorMaxEnergy, this.energy + settings.thirstEnergyGain);
+            let closestPoint = null;
+            let minPointDistance = Infinity;
+            for (const lake of lakes) {
+              if (lake.contains(this.x, this.y)) {
+                for (const point of lake.points) {
+                  const distance = Math.hypot(this.x - point.x, this.y - point.y);
+                  if (distance < minPointDistance) {
+                    minPointDistance = distance;
+                    closestPoint = point;
+                  }
+                }
+                break;
+              }
+            }
+            this.lastAngle = closestPoint
+              ? Math.atan2(closestPoint.y - this.y, closestPoint.x - this.x)
+              : random() * Math.PI * 2;
+          }
+          return;
+        }
+
+        if (this.energy < settings.predatorMaxEnergy * settings.predatorHungerThreshold) {
+          this.state = 'hunting';
+        } else if (this.energy > settings.predatorSatedEnergy) {
+          this.state = 'sated';
+        } else {
+          this.state = 'wandering';
+        }
+
+        let currentSpeed = this.state === 'hunting' ? this.speed * settings.predatorHuntingSpeedMultiplier :
+                         this.state === 'sated' ? this.speed * 0.5 : this.speed;
+
+        let target = null;
+        let minDistance = Infinity;
+        let angle;
+
+        const edgeAngle = Util.checkEdges(this, this.lastAngle);
+        if (this.isEscapingStuck) {
+          angle = this.lastAngle;
+        } else if (edgeAngle !== null) {
+          angle = edgeAngle;
+        } else if (this.state === 'hunting' && this.eatingCooldown === 0) {
+          const nearbyPreys = preyGrid.search(this.x, this.y, settings.predatorSearchRadius);
+          for (const prey of nearbyPreys) {
+            const distance = Math.hypot(this.x - prey.x, this.y - prey.y);
+            const preyEnergy = prey.energy / settings.preyMaxEnergy;
+            const score = distance * (1 + preyEnergy);
+            if (score < minDistance) {
+              minDistance = score;
+              target = prey;
+            }
+          }
+
+          if (target) {
+            let isLeader = true;
+            let predatorsOnTarget = 0;
+            const groupPredators = predatorGrid.search(this.x, this.y, settings.predatorGroupRadius);
+            for (const other of groupPredators) {
+              if (other.id === this.id) continue;
+              const distanceToTarget = Math.hypot(other.x - target.x, other.y - target.y);
+              if (distanceToTarget < settings.predatorSearchRadius) {
+                predatorsOnTarget++;
+                if (distanceToTarget < minDistance) {
+                  isLeader = false;
+                }
+              }
+            }
+
+            if (predatorsOnTarget > 2 && random() < 0.2) {
+              this.lastAngle = random() * Math.PI * 2;
+              angle = this.lastAngle;
+            } else {
+              const distanceToTarget = Math.hypot(this.x - target.x, this.y - target.y);
+              if (distanceToTarget > settings.predatorAmbushRadius) {
+                currentSpeed = this.speed * 0.6;
+              } else {
+                currentSpeed = this.speed * settings.predatorHuntingSpeedMultiplier;
+              }
+
+              if (!isLeader) {
+                const directAngle = Math.atan2(target.y - this.y, target.x - this.x);
+                const flankAngle = directAngle + (random() > 0.5 ? 1 : -1) * Math.PI / 4;
+                angle = flankAngle;
+              } else {
+                angle = Math.atan2(target.y - this.y, target.x - this.x);
+              }
+            }
+          } else {
+            this.lastAngle += (random() - 0.5) * 0.3;
+            angle = this.lastAngle;
+          }
+        } else if (this.thirst > settings.thirstThreshold) {
+          closestLake = Util.findSafeLake(this, lakes, []);
+          angle = Math.atan2(closestLake.y - this.y, closestLake.x - this.x);
+          const distanceToLake = Math.hypot(this.x - closestLake.x, this.y - closestLake.y);
+          if (distanceToLake < settings.lakeEdgeDrinkDistance && !this.isDrinking) {
+            this.isDrinking = true;
+            this.drinkTimer = settings.drinkDuration;
+            this.drinkAnimation = settings.drinkDuration;
+          }
+        } else {
+          this.lastAngle += (random() - 0.5) * 0.3;
+          angle = this.lastAngle;
+        }
+
+        angle = Util.avoidLake(this, angle);
+
+        this.x += Math.cos(angle) * (this.isEscapingStuck ? currentSpeed * 1.5 : currentSpeed);
+        this.y += Math.sin(angle) * (this.isEscapingStuck ? currentSpeed * 1.5 : currentSpeed);
+        this.lastAngle = angle;
+
+        this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+        this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+
+        this.energy -= settings.predatorEnergyLoss * (this.state === 'sated' ? 0.7 : 1);
+
+        if (this.eatingCooldown === 0 && this.preyEatenThisMeal < settings.maxPreyPerMeal && 
+            this.stuckTimer <= 60 && !this.isJuvenile) {
+          const nearbyPreys = preyGrid.search(this.x, this.y, settings.predatorSearchRadius);
+          for (const prey of nearbyPreys) {
+            const distance = Math.hypot(this.x - prey.x, this.y - prey.y);
+            if (distance < this.size + prey.size) {
+              this.energy = Math.min(settings.predatorMaxEnergy, this.energy + settings.predatorEnergyGain);
+              this.eatAnimation = 20;
+              this.preyEatenThisMeal++;
+              this.timeSinceLastMeal = 0;
+              preysToRemove.push(prey);
+              events.emit('preyKilled');
+              this.isEating = true;
+              this.eatTimer = settings.eatDuration;
+              if (this.preyEatenThisMeal >= settings.maxPreyPerMeal || this.energy > settings.predatorSatedEnergy) {
+                this.eatingCooldown = settings.predatorEatingCooldown;
+                this.state = 'sated';
+              }
+              break;
+            }
+          }
+        }
+
+        if (!this.isJuvenile && predators.length < settings.maxPredators &&
+            this.energy > settings.predatorMaxEnergy * settings.predatorReproductionEnergyThreshold &&
+            this.reproductionCooldown === 0 && this.state !== 'hunting' &&
+            random() < settings.reproductionChance && this.offspring.length === 0) {
+          const numOffspring = Math.floor(random() * settings.predatorMaxOffspring) + 1;
+          for (let i = 0; i < numOffspring && predators.length < settings.maxPredators; i++) {
+            const offspring = new Predator(this);
+            offspring.x = this.x + (random() - 0.5) * 10;
+            offspring.y = this.y + (random() - 0.5) * 10;
+            predators.push(offspring);
+            this.offspring.push(offspring);
+          }
+          this.reproductionCooldown = settings.predatorReproductionCooldown;
+          this.energy *= 0.8;
+        }
+
+        if (this.eatingCooldown === 0 && this.preyEatenThisMeal > 0 && this.timeSinceLastMeal > 60) {
+          this.preyEatenThisMeal = 0;
+        }
+
+        if (this.energy <= 0) {
+          predatorsToRemove.push(this);
+          events.emit('predatorKilled');
+        }
+
+        if (this.eatAnimation > 0) this.eatAnimation--;
+      }
+
+      draw() {
+        const energyFactor = this.energy / settings.predatorMaxEnergy;
+        let baseColor;
+        if (this.isJuvenile) {
+          baseColor = settings.predatorJuvenileColor;
+        } else {
+          baseColor = this.state === 'hunting' ? [255, 0, 0] : [255, Math.floor(100 * (1 - energyFactor)), 0];
+        }
+        const alpha = this.eatAnimation > 0 || this.drinkAnimation > 0 ? 1 : 0.7;
+        bufferCtx.fillStyle = `rgba(${baseColor.join(',')}, ${alpha})`;
+        bufferCtx.beginPath();
+        const pulseAmplitude = this.size * 0.4;
+        const pulsingSize = this.eatAnimation > 0 ? 
+                            this.size + Math.sin(this.eatAnimation * Math.PI / 10) * pulseAmplitude :
+                            this.drinkAnimation > 0 ?
+                            this.size + Math.sin(this.drinkAnimation * Math.PI / 10) * pulseAmplitude :
+                            this.size;
+        bufferCtx.arc(this.x, this.y, Math.max(0.1, pulsingSize), 0, Math.PI * 2);
+        bufferCtx.fill();
+      }
+    }
+
+    // Funções de atualização e renderização
+    function updatePlantRegeneration() {
+      for (let i = plantsToRegenerate.length - 1; i >= 0; i--) {
+        const regeneration = plantsToRegenerate[i];
+        if (--regeneration.timer <= 0) {
+          if (plants.length < settings.maxPlants) {
+            plants.push(new Plant(regeneration.x, regeneration.y));
+            stats.plantsBorn++;
+          }
+          plantsToRegenerate.splice(i, 1);
+        }
+      }
+    }
+
+    function removeMarkedEntities() {
+      plantsToRemove.forEach(plant => {
+        const index = plants.indexOf(plant);
+        if (index !== -1) plants.splice(index, 1);
+      });
+
+      preysToRemove.forEach(prey => {
+        const index = preys.indexOf(prey);
+        if (index !== -1) preys.splice(index, 1);
+      });
+
+      predatorsToRemove.forEach(predator => {
+        const index = predators.indexOf(predator);
+        if (index !== -1) predators.splice(index, 1);
+      });
+
+      plantsToRemove = [];
+      preysToRemove = [];
+      predatorsToRemove = [];
+    }
+
+    function drawInfoPanel() {
+      const numPreyJuveniles = preys.filter(p => p.isJuvenile).length;
+      const numPredatorJuveniles = predators.filter(p => p.isJuvenile).length;
+      
+      const lineHeight = 15;
+      const padding = 10;
+      const boxWidth = 220;
+      const totalHeight = 5 * lineHeight + padding * 2;
+
+      bufferCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      bufferCtx.fillRect(5, 5, boxWidth, totalHeight);
+
+      bufferCtx.fillStyle = 'white';
+      bufferCtx.font = '12px Arial';
+      bufferCtx.textAlign = 'left';
+
+      // Draw plant icon and info
+      bufferCtx.fillStyle = COLORS.PLANT[0];
+      bufferCtx.beginPath();
+      bufferCtx.arc(15, 20, 5, 0, Math.PI * 2);
+      bufferCtx.fill();
+      bufferCtx.fillStyle = 'white';
+      bufferCtx.fillText(`Plantas: ${plants.length}/${settings.maxPlants}`, 25, 25);
+
+      // Draw predator icon and info
+      bufferCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+      bufferCtx.beginPath();
+      bufferCtx.arc(15, 35, 5, 0, Math.PI * 2);
+      bufferCtx.fill();
+      bufferCtx.fillStyle = 'white';
+      bufferCtx.fillText(`Predadores: ${predators.length}/${settings.maxPredators} Crias: ${numPredatorJuveniles} Mortes: ${stats.predatorsKilled}`, 25, 40);
+
+      // Draw prey icon and info
+      bufferCtx.fillStyle = 'rgba(255, 150, 0, 0.8)';
+      bufferCtx.beginPath();
+      bufferCtx.arc(15, 50, 5, 0, Math.PI * 2);
+      bufferCtx.fill();
+      bufferCtx.fillStyle = 'white';
+      bufferCtx.fillText(`Presas: ${preys.length}/${settings.maxPreys} Crias: ${numPreyJuveniles} Mortes: ${stats.preysKilled}`, 25, 55);
+
+      // Time and controls
+      bufferCtx.fillText(`Tempo: ${stats.activityTime()}`, 10, 75);
+      bufferCtx.fillText(`Controles: R:Reiniciar P:Pausar`, 10, 90);
+
+      bufferCtx.textAlign = 'right';
+      bufferCtx.fillText(`Mini Ecosystem v3.3 by Shadowչ`, canvas.width - 10, canvas.height - 10);
+    }
+
+    // Variáveis Globais
+    let animationFrameId = null;
+    const plants = [];
+    const preys = [];
+    const predators = [];
+    const trees = [];
+    let plantsToRemove = [];
+    let preysToRemove = [];
+    let predatorsToRemove = [];
+    let plantsToRegenerate = [];
+    let frameCounter = 0;
+    let lastResetTime = Date.now();
+    let lakes = [];
+    let paused = false;
+
+    // Ajustar canvas ao redimensionar a janela
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      bufferCanvas.width = canvas.width;
+      bufferCanvas.height = canvas.height;
+    });
+
+    function initialize() {
+      bufferCtx.fillStyle = '#132E21'; // Fundo sólido verde escuro
+      bufferCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+      plants.length = 0;
+      preys.length = 0;
+      predators.length = 0;
+      trees.length = 0;
+      lakes.length = 0;
+
+      stats.plantsBorn = 0;
+      stats.plantsEaten = 0;
+      stats.preysKilled = 0;
+      stats.predatorsKilled = 0;
+      stats.startTime = Date.now();
+
+      const margin = 50 * 1.2;
+      const lake1 = new Lake(
+        50,
+        margin + random() * (canvas.width / 2 - 2 * margin),
+        margin + random() * (canvas.height - 2 * margin)
+      );
+
+      const lake2 = new Lake(
+        50,
+        canvas.width / 2 + margin + random() * (canvas.width / 2 - 2 * margin),
+        margin + random() * (canvas.height - 2 * margin)
+      );
+
+      if (Math.hypot(lake1.x - lake2.x, lake1.y - lake2.y) >= settings.lakeMinDistance) {
+        lakes.push(lake1, lake2);
+      } else {
+        lakes.push(lake1);
+      }
+
+      for (let i = 0; i < settings.initialPlants; i++) {
+        plants.push(new Plant(null, null, true));
+        stats.plantsBorn++;
+      }
+
+      for (let i = 0; i < settings.initialPreys; i++) {
+        preys.push(new Prey());
+      }
+
+      for (let i = 0; i < settings.initialPredators; i++) {
+        predators.push(new Predator());
+      }
+
+      frameCounter = 0;
+      lastResetTime = Date.now();
+      paused = false;
+    }
+
+    function update() {
+      if (paused) return;
+
+      frameCounter++;
+
+      // Primeiro atualize predadores
+      predatorGrid.clear();
+      predators.forEach(predator => {
+        predator.update();
+        predatorGrid.insert(predator);
+      });
+
+      // Depois atualize presas (que agora verão predadores atualizados)
+      preyGrid.clear();
+      preys.forEach(prey => {
+        prey.update();
+        preyGrid.insert(prey);
+      });
+
+      // Finalmente plantas
+      plantGrid.clear();
+      plants.forEach(plant => {
+        plant.update();
+        plantGrid.insert(plant);
+      });
+
+      updatePlantRegeneration();
+      removeMarkedEntities();
+    }
+
+
+    function render() {
+    if (paused) {
+        // Se estiver pausado, não continuar o loop de animação
+        return;
+    }
+
+    bufferCtx.fillStyle = '#132E21';
+    bufferCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+    lakes.forEach(lake => lake.draw());
+    trees.forEach(tree => tree.draw());
+    plants.forEach(plant => plant.draw());
+    preys.forEach(prey => prey.draw());
+    predators.forEach(predator => predator.draw());
+
+    drawInfoPanel();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bufferCanvas, 0, 0);
+
+    animationFrameId = requestAnimationFrame(() => {
+        update();
+        render();
+    });
+    }
+
+    document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'r') {
+        if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        }
+        initialize();
+        render();
+    } else if (e.key.toLowerCase() === 'p') {
+        paused = !paused;
+        if (!paused) {
+        // Quando despausar, reiniciar o loop de animação corretamente
+        if (!animationFrameId) {
+            render();
+        }
+        } else {
+        // Quando pausar, cancelar o frame atual
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+        }
+    }
+    });
+
+    initialize();
+    render();
+  </script>
+</body>
+</html>
