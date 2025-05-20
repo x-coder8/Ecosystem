@@ -3,7 +3,7 @@
 Mini Ecossistema em HTML5 (v3.3)
 Uma simulação dinâmica de ecossistema com plantas, presas e predadores, implementada em HTML5 Canvas e JavaScript.
 
-(Captura de ecrã do ecossistema)
+![Simulação do Ecossistema](images/ecosystem.png)
 
 Características Principais
 Sistema completo de cadeia alimentar: plantas → presas → predadores
