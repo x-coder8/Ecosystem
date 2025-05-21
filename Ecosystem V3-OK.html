@@ -45,13 +45,13 @@
       LAKE_CENTER: 'rgba(50, 150, 200, 0.8)',
     };
 
-    // Configurações
+    // Configurações (Os valores definem o equilíbrio do ecossistema - alterá-los muda drasticamente a dinâmica de população e comportamento.)
     const Config = () => ({
       // Configurações gerais
-      initialPlants: 200,
-      maxPlants: 1600,
-      plantGrowthRate: 0.05,
-      plantReproductionChance: 0.06,
+      initialPlants: 200,                      // Número inicial de plantas
+      maxPlants: 1600,                         // Limite máximo de plantas
+      plantGrowthRate: 0.05,                   // Velocidade de crescimento das plantas
+      plantReproductionChance: 0.06,           // Chance de reprodução das plantas
       seedDispersalChance: 0.008,
       plantRegenerationDelay: 180,
       plantClusterSize: 5,
@@ -60,8 +60,8 @@
       lakeMinDistance: 200,
       lakeEdgeDrinkDistance: 5,
       lakeAvoidDistance: 15,
-      thirstIncreaseRate: 0.1,
-      thirstThreshold: 600,
+      thirstIncreaseRate: 0.1,                  // Velocidade de aumento da sede
+      thirstThreshold: 600,                     // Nível em que os animais buscam água
       thirstEnergyGain: 5,
       postDrinkFleeDuration: 200,
       drinkDuration: 60,
@@ -71,15 +71,15 @@
       marginAvoidance: 10,
 
       // Configurações de presas
-      initialPreys: 12,
-      maxPreys: 30,
-      preyEnergyLoss: 0.006,
+      initialPreys: 12,                         // Número inicial de presas
+      maxPreys: 30,                             // Limite máximo de presas
+      preyEnergyLoss: 0.006,                    // Perda de energia por movimento
       preyFleeEnergyLossMultiplier: 2.0,
       preyEnergyGain: 2.5,
       preyMaxEnergy: 140,
       preyEatCooldown: 150,
       preySearchRadius: 300,
-      preyPredatorAvoidRadius: 300,
+      preyPredatorAvoidRadius: 300,             // Distância que presas evitam predadores
       preyPredatorAlertRadius: 150,
       preyPredatorWarningRadius: 250,
       preyPredatorCriticalRadius: 100,
@@ -87,13 +87,13 @@
       preyAlertSpeedMultiplier: 0.6,
       preyWarningSpeedMultiplier: 0.8,
       preyMinPlantSize: 4,
-      preySpeed: 1.0,
+      preySpeed: 1.0,                           // Velocidade base das presas
       preyGroupRadius: 150,
       preyTreeSeekRadius: 200,
       preyEnergyFleeBoost: 1.5,
       preyFleeEnergyThreshold: 0.3,
       preyReproductionEnergyThreshold: 0.7,
-      preyReproductionCooldown: 450,
+      preyReproductionCooldown: 450,            // Tempo entre reproduções das presas
       preyJuvenileSize: 3,
       preyMatureSize: 5,
       preyJuvenileColor: [255, 255, 100],
@@ -101,17 +101,17 @@
       preyMaturationAge: 10,
 
       // Configurações de predadores
-      initialPredators: 2,
-      maxPredators: 5,
-      predatorEnergyLoss: 0.01,
+      initialPredators: 2,                      // Número inicial de predadores
+      maxPredators: 5,                          // Limite máximo de predadores
+      predatorEnergyLoss: 0.01,                 // Perda de energia por movimento
       predatorEnergyGain: 35,
       predatorSatedEnergy: 100,
       predatorMaxEnergy: 150,
       predatorEatingCooldown: 250,
       maxPreyPerMeal: 2,
       eatDuration: 120,
-      predatorSearchRadius: 350,
-      predatorSpeed: 2.4,
+      predatorSearchRadius: 350,                // Alcance de visão dos predadores
+      predatorSpeed: 2.4,                       // Velocidade base dos predadores
       predatorStealthRadius: 60,
       predatorGroupRadius: 120,
       predatorDispersionForce: 0.3,
@@ -120,20 +120,20 @@
       predatorHuntingSpeedMultiplier: 2.0,
       predatorAmbushRadius: 130,
       predatorReproductionEnergyThreshold: 0.7,
-      predatorReproductionCooldown: 1200,
+      predatorReproductionCooldown: 1200,       // Tempo entre reproduções dos predadores
       predatorJuvenileSize: 4,
       predatorMatureSize: 7,
-      predatorJuvenileColor: [255, 128, 128], // 255,10, 10
+      predatorJuvenileColor: [255, 128, 128],
       predatorMaxOffspring: 2,
       predatorMaturationAge: 10,
 
-      // Configurações compartilhadas de reprodução
+      // Configurações partilhadas de reprodução
       juvenileFollowDistance: 25,
-      reproductionChance: 0.02,
+      reproductionChance: 0.02,                 // Chance base de reprodução
 
       // ... outras configurações
-      lakeAvoidDistance: 20,  // Distância para começar a evitar o lago
-      lakeAvoidForce: 0.8,    // Força da evasão
+      lakeAvoidDistance: 20,                    // Distância para começar a evitar o lago
+      lakeAvoidForce: 0.8,                      // Força da evasão
     });
     const settings = Config();
 
