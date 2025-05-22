@@ -70,10 +70,9 @@ Possíveis melhorias:
 
 - Melhorias no geral
 - Melhorias na colisão/desvio dos lagos
-
-- Implementar sistema de doenças (?)
-- Implementar estações do ano (?)
-- Implementar meteorologia (?)
+- Implementar sistema de doenças
+- Implementar estações do ano
+- Implementar meteorologia
 
 
 > **Experimente observar como as populações se equilibram (ou desequilibram) ao longo do tempo!**
