@@ -30,8 +30,8 @@ Uma simulação dinâmica de ecossistema com plantas, presas e predadores, imple
 
 Abra o ficheiro HTML num navegador moderno.
 
-[Teste aqui](https://htmlpreview.github.io/?https://raw.githubusercontent.com/x-coder8/Ecosystem/main/Ecosystem%20V3-OK.html)]
-Clique aqui [para testar]([https://www.example.com](https://htmlpreview.github.io/?https://raw.githubusercontent.com/x-coder8/Ecosystem/main/Ecosystem%20V3-OK.html)).
+[Pode testar aqui](https://htmlpreview.github.io/?https://raw.githubusercontent.com/x-coder8/Ecosystem/main/Ecosystem%20V3-OK.html)]
+
 
 ### Controlos
 
