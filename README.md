@@ -73,8 +73,8 @@ Possíveis melhorias:
 - Melhorias no geral
 - Melhorias na colisão/desvio dos lagos
 - Implementar sistema de doenças
-- Implementar estações do ano
-- Implementar meteorologia
+- Implementar estações do ano (com influências no comportamento)
+- Implementar meteorologia (com influências no comportamento)
 
 
 > **Experimente observar como as populações se equilibram (ou desequilibram) ao longo do tempo!**
